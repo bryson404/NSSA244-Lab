@@ -99,7 +99,7 @@
                 "2"
             ],
             "properties": {
-                
+                "ipAddress": "20.186.89.203",
                 "publicIPAddressVersion": "IPv4",
                 "publicIPAllocationMethod": "Static",
                 "idleTimeoutInMinutes": 4,
@@ -188,8 +188,8 @@
                         "createOption": "FromImage",
                         "caching": "ReadWrite",
                         "managedDisk": {
-                            "storageAccountType": "Premium_LRS"
-                            
+                            "storageAccountType": "Premium_LRS",
+                            "id": "[resourceId('Microsoft.Compute/disks', concat(parameters('virtualMachines_WEB1_name'), '_OsDisk_1_0ecb7c3de38e4b0daa2f199235eafaa1'))]"
                         },
                         "deleteOption": "Delete",
                         "diskSizeGB": 30
@@ -198,12 +198,12 @@
                         {
                             "lun": 0,
                             "name": "[concat(parameters('virtualMachines_WEB1_name'), '-DATA1')]",
-                            "createOption": "Empty",
+                            "createOption": "Attach",
                             "caching": "ReadOnly",
                             "writeAcceleratorEnabled": false,
                             "managedDisk": {
-                                "storageAccountType": "StandardSSD_LRS"
-                                
+                                "storageAccountType": "StandardSSD_LRS",
+                                "id": "[resourceId('Microsoft.Compute/disks', 'web1-data1')]"
                             },
                             "deleteOption": "Detach",
                             "diskSizeGB": 16,
@@ -235,8 +235,8 @@
                         }
                     },
                     "secrets": [],
-                    "allowExtensionOperations": true
-                    
+                    "allowExtensionOperations": true,
+                    "requireGuestProvisionSignal": true
                 },
                 "securityProfile": {
                     "uefiSettings": {
