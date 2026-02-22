@@ -1,0 +1,210 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "web1Name": { "defaultValue": "web1", "type": "String" },
+        "web2Name": { "defaultValue": "web2", "type": "String" },
+        "web1NicName": { "defaultValue": "web1-nic", "type": "String" },
+        "web2NicName": { "defaultValue": "web2-nic", "type": "String" },
+        "lbIpName": { "defaultValue": "lb-ip", "type": "String" },
+        "lbName": { "defaultValue": "web-lb", "type": "String" },
+        "vnetName": { "defaultValue": "vnet-lab1", "type": "String" },
+        "nsgName": { "defaultValue": "nsg-lab", "type": "String" },
+        "sshKeyName": { "defaultValue": "web-key", "type": "String" }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.Compute/sshPublicKeys",
+            "apiVersion": "2024-11-01",
+            "name": "[parameters('sshKeyName')]",
+            "location": "eastus2",
+            "properties": {
+                "publicKey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXRpPbrICJoBXzosJ7by/w0TkVkXMKfRGEMkfsTB8ZaQlnsSnYHE8ogjoCyAz+iXQgL0AbqsCZlFKG7hY+CIpW4cmEPnwaPk60GVysDSxt77UbKKgaU4+8P9xHKX38UAMvauf8YYOVVh6+PYZo4sO+Fgwk5fbIPt1y5wv+bxo2NQH6YSrySyTusHpvH0cqOINRj0Ji4AsBcHerGGu/JD4jbRK8KrsUruib/E5c0OdQBiDzHsyXKB9r6QU1OFfH6aEhZPGIt/Z1dD/PE/F9rStxKnF3iYd25lg5BTjVOAgay3DZapMzjk7X2omMWIdCxHBU2FqAILf2H/BuTGtu3XA+R6CA68hTp3GeFZL3osQemlMWd61PcjOnho93QalsoseqrOYZZVYsgAXSdyDHMzKu/pR3nZowqRVUlFTagZFL0/LeoBCjtX7mGUfWJ16LxlOcFzEZTI78tan3IlJSWj6dUv9+1CHEQ4/PhUPeHaYPDaeU7qnaR8bHdyGP/YmQTl0= generated-by-azure"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('nsgName')]",
+            "location": "eastus2",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "ALLOW-SSH",
+                        "properties": { "protocol": "TCP", "sourcePortRange": "*", "destinationPortRange": "22", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*", "access": "Allow", "priority": 100, "direction": "Inbound" }
+                    },
+                    {
+                        "name": "ALLOW-HTTP",
+                        "properties": { "protocol": "TCP", "sourcePortRange": "*", "destinationPortRange": "80", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*", "access": "Allow", "priority": 101, "direction": "Inbound" }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('lbIpName')]",
+            "location": "eastus2",
+            "sku": { "name": "Standard" },
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            }
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('lbName')]",
+            "location": "eastus2",
+            "sku": { "name": "Standard" },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('lbIpName'))]"
+            ],
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "publicIPAddress": { "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('lbIpName'))]" }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    { "name": "LoadBalancerBackEndPool" }
+                ],
+                "probes": [
+                    {
+                        "name": "HealthProbe",
+                        "properties": { "protocol": "Tcp", "port": 80, "intervalInSeconds": 5, "numberOfProbes": 2 }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "HTTPRule",
+                        "properties": {
+                            "frontendIPConfiguration": { "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('lbName')), '/frontendIPConfigurations/LoadBalancerFrontEnd')]" },
+                            "backendAddressPool": { "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('lbName')), '/backendAddressPools/LoadBalancerBackEndPool')]" },
+                            "probe": { "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('lbName')), '/probes/HealthProbe')]" },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "idleTimeoutInMinutes": 4
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('vnetName')]",
+            "location": "eastus2",
+            "properties": {
+                "addressSpace": { "addressPrefixes": [ "10.0.0.0/16" ] },
+                "subnets": [
+                    { "name": "SUBNET-WEB", "properties": { "addressPrefixes": [ "10.0.1.0/24" ] } }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('web1NicName')]",
+            "location": "eastus2",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
+                "[resourceId('Microsoft.Network/loadBalancers', parameters('lbName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": { "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), 'SUBNET-WEB')]" },
+                            "loadBalancerBackendAddressPools": [
+                                { "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('lbName')), '/backendAddressPools/LoadBalancerBackEndPool')]" }
+                            ]
+                        }
+                    }
+                ],
+                "networkSecurityGroup": { "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]" }
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2024-07-01",
+            "name": "[parameters('web2NicName')]",
+            "location": "eastus2",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
+                "[resourceId('Microsoft.Network/loadBalancers', parameters('lbName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": { "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), 'SUBNET-WEB')]" },
+                            "loadBalancerBackendAddressPools": [
+                                { "id": "[concat(resourceId('Microsoft.Network/loadBalancers', parameters('lbName')), '/backendAddressPools/LoadBalancerBackEndPool')]" }
+                            ]
+                        }
+                    }
+                ],
+                "networkSecurityGroup": { "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]" }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2024-11-01",
+            "name": "[parameters('web1Name')]",
+            "location": "eastus2",
+            "dependsOn": [ "[resourceId('Microsoft.Network/networkInterfaces', parameters('web1NicName'))]" ],
+            "zones": [ "2" ],
+            "properties": {
+                "hardwareProfile": { "vmSize": "Standard_D2s_v3" },
+                "storageProfile": {
+                    "imageReference": { "publisher": "canonical", "offer": "0001-com-ubuntu-server-jammy", "sku": "22_04-lts-gen2", "version": "latest" },
+                    "osDisk": { "osType": "Linux", "name": "[concat(parameters('web1Name'), '-osdisk')]", "createOption": "FromImage", "caching": "ReadWrite", "managedDisk": { "storageAccountType": "Premium_LRS" } }
+                },
+                "osProfile": {
+                    "computerName": "[parameters('web1Name')]",
+                    "adminUsername": "azureuser",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": true,
+                        "ssh": { "publicKeys": [ { "path": "/home/azureuser/.ssh/authorized_keys", "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXRpPbrICJoBXzosJ7by/w0TkVkXMKfRGEMkfsTB8ZaQlnsSnYHE8ogjoCyAz+iXQgL0AbqsCZlFKG7hY+CIpW4cmEPnwaPk60GVysDSxt77UbKKgaU4+8P9xHKX38UAMvauf8YYOVVh6+PYZo4sO+Fgwk5fbIPt1y5wv+bxo2NQH6YSrySyTusHpvH0cqOINRj0Ji4AsBcHerGGu/JD4jbRK8KrsUruib/E5c0OdQBiDzHsyXKB9r6QU1OFfH6aEhZPGIt/Z1dD/PE/F9rStxKnF3iYd25lg5BTjVOAgay3DZapMzjk7X2omMWIdCxHBU2FqAILf2H/BuTGtu3XA+R6CA68hTp3GeFZL3osQemlMWd61PcjOnho93QalsoseqrOYZZVYsgAXSdyDHMzKu/pR3nZowqRVUlFTagZFL0/LeoBCjtX7mGUfWJ16LxlOcFzEZTI78tan3IlJSWj6dUv9+1CHEQ4/PhUPeHaYPDaeU7qnaR8bHdyGP/YmQTl0= generated-by-azure" } ] }
+                    }
+                },
+                "networkProfile": { "networkInterfaces": [ { "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('web1NicName'))]" } ] }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2024-11-01",
+            "name": "[parameters('web2Name')]",
+            "location": "eastus2",
+            "dependsOn": [ "[resourceId('Microsoft.Network/networkInterfaces', parameters('web2NicName'))]" ],
+            "zones": [ "2" ],
+            "properties": {
+                "hardwareProfile": { "vmSize": "Standard_D2s_v3" },
+                "storageProfile": {
+                    "imageReference": { "publisher": "canonical", "offer": "0001-com-ubuntu-server-jammy", "sku": "22_04-lts-gen2", "version": "latest" },
+                    "osDisk": { "osType": "Linux", "name": "[concat(parameters('web2Name'), '-osdisk')]", "createOption": "FromImage", "caching": "ReadWrite", "managedDisk": { "storageAccountType": "Premium_LRS" } }
+                },
+                "osProfile": {
+                    "computerName": "[parameters('web2Name')]",
+                    "adminUsername": "azureuser",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": true,
+                        "ssh": { "publicKeys": [ { "path": "/home/azureuser/.ssh/authorized_keys", "keyData": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDXRpPbrICJoBXzosJ7by/w0TkVkXMKfRGEMkfsTB8ZaQlnsSnYHE8ogjoCyAz+iXQgL0AbqsCZlFKG7hY+CIpW4cmEPnwaPk60GVysDSxt77UbKKgaU4+8P9xHKX38UAMvauf8YYOVVh6+PYZo4sO+Fgwk5fbIPt1y5wv+bxo2NQH6YSrySyTusHpvH0cqOINRj0Ji4AsBcHerGGu/JD4jbRK8KrsUruib/E5c0OdQBiDzHsyXKB9r6QU1OFfH6aEhZPGIt/Z1dD/PE/F9rStxKnF3iYd25lg5BTjVOAgay3DZapMzjk7X2omMWIdCxHBU2FqAILf2H/BuTGtu3XA+R6CA68hTp3GeFZL3osQemlMWd61PcjOnho93QalsoseqrOYZZVYsgAXSdyDHMzKu/pR3nZowqRVUlFTagZFL0/LeoBCjtX7mGUfWJ16LxlOcFzEZTI78tan3IlJSWj6dUv9+1CHEQ4/PhUPeHaYPDaeU7qnaR8bHdyGP/YmQTl0= generated-by-azure" } ] }
+                    }
+                },
+                "networkProfile": { "networkInterfaces": [ { "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('web2NicName'))]" } ] }
+            }
+        }
+    ]
+}
